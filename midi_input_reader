@@ -1,0 +1,193 @@
+import sys
+import os
+import threading
+import pygame as pg
+import pygame.midi
+from numpy import interp
+import Player as P
+
+window_x = 200
+window_y = 200
+os.environ['SDL_VIDEO_WINDOW_POS'] = "%d, %d" % (window_x, window_y)
+
+p1 = P.Player("C major", "Matt")
+print(p1)
+
+size = width, height = 800, 400
+
+notes_values = [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+]
+
+notes = [
+    'C',
+    'Db',
+    'D',
+    'Eb',
+    'E',
+    'F',
+    'Gb',
+    'G',
+    'Ab',
+    'A',
+    'Bb',
+    'B',
+    'None'
+]
+
+
+def print_device_info():
+    pygame.midi.init()
+    _print_device_info()
+    pygame.midi.quit()
+
+
+def show_piano(display_surface):
+    for x in range(12):
+        pg.draw.rect(display_surface, (128, 0, 0), pg.Rect((x * 30) + 50, 300, 20, 30))
+        pg.display.flip()
+
+
+def create_text(curr_note, display_surface, font):
+    curr_note_mod = curr_note % 12
+    curr_note_text = notes[curr_note_mod]
+    rect_y = height / 2
+
+    if curr_note_text == 'Bb' or curr_note_text == 'Eb' or curr_note_text == 'Db' or curr_note_text == 'Gb' or curr_note_text == 'Ab':
+        text_color = (0, 0, 0)
+        background_text_color = (255, 255, 255)
+        rect_y = rect_y - (height / 4)
+    else:
+        text_color = (255, 255, 255)
+        background_text_color = (0, 0, 0)
+
+    rect_x = interp(curr_note_mod, [0, 11], [(0.2 * width), (0.8 * width)])
+
+    text = font.render(curr_note_text, True, background_text_color, text_color)
+    text_rect = text.get_rect()
+    text_rect.center = (int(rect_x), rect_y)
+
+    display_surface.blit(text, text_rect)
+    pg.display.update()
+
+
+"""
+class Game():
+    pygame.init()
+    size = width, height = 1000, 800
+    display_surface = pygame.display.set_mode(size)
+    font = pygame.font.SysFont("Arial", 32)
+    pygame.display.set_caption('Show Note')
+
+    def create_text(self, curr_note):
+        text = self.font.render(curr_note, True, (0, 255, 0), (0, 0, 128))
+        text_rect = text.get_rect()
+        text_rect.center = (Game.width / 2, Game.height / 2)
+
+        Game.display_surface.fill((0, 0, 0))
+        Game.display_surface.blit(text, text_rect)
+"""
+
+
+def _print_device_info():
+
+    for i in range(pygame.midi.get_count()):
+        r = pygame.midi.get_device_info(i)
+        (interf, name, input, output, opened) = r
+
+        in_out = ""
+        if input:
+            in_out = "(input)"
+        if output:
+            in_out = "(output)"
+
+        print(
+            "%2i: interface :%s:, name :%s:, opened :%s:  %s"
+            % (i, interf, name, opened, in_out)
+        )
+
+
+def input_main(device_id=None):
+
+    curr_note = 13
+    pg.init()
+    pg.fastevent.init()
+    event_get = pg.fastevent.get
+    event_post = pg.fastevent.post
+
+    pygame.midi.init()
+
+    if device_id is None:
+        input_id = pygame.midi.get_default_input_id()
+    else:
+        input_id = device_id
+
+    print("using input_id :%s:" % input_id)
+    i = pygame.midi.Input(input_id)
+
+    pg.display.set_mode((1, 1))
+
+    display_surface = pg.display.set_mode(size)
+    font = pg.font.SysFont("Arial", 32)
+    pg.display.set_caption('Show Note')
+    display_surface.fill((128, 128, 128))
+    any_notes_down = False
+
+    going = True
+    while going:
+        # pg.time.wait(12)
+
+        for x in range(len(notes_values)):
+            if notes_values[x] % 2 == 1:
+                # print('creating text for value at %d', notes_values[x])
+                any_notes_down = True
+                create_text(x, display_surface, font)
+        if any_notes_down:
+            display_surface.fill((128, 128, 128))
+
+        curr_note = 13
+        events = event_get()
+        for e in events:
+            if e.type in [pg.QUIT]:
+                going = False
+            if e.type in [pg.KEYDOWN]:
+                going = False
+            if e.type in [pygame.midi.MIDIIN] and e.dict['data1'] > 20 and e.dict['data1'] <= 108:
+                curr_note = int(e.dict['data1'])
+
+                if curr_note is None or curr_note == 13:
+                    print('None')
+                else:
+                    if notes_values[curr_note % 12] % 2 == 0:
+                        notes_values[curr_note % 12] += 1
+                    elif notes_values[curr_note % 12] % 2 == 1:
+                        notes_values[curr_note % 12] += 1
+
+
+
+        if i.poll():
+            midi_events = i.read(1)
+            # convert them into pygame events.
+            midi_evs = pygame.midi.midis2events(midi_events, i.device_id)
+
+            for m_e in midi_evs:
+                event_post(m_e)
+
+    del i
+
+    pygame.midi.quit()
+
+
+input_main(1)
